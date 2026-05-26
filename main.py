@@ -35,32 +35,34 @@ targets_ips = {
   'TB SUBNET PFCC3 MON Lane DEFAULT IP': '172.28.1.213',
   'COM Lane RESERVE IP': '172.1.254.253',
   'MON Lane RESERVE IP': '172.1.254.254',
+  'PFCCTB DPC': '172.28.1.10',
+  'PFCCTB RTPC': '172.28.1.1',
 }
 
 targets = {
   'PFCC1 COM Lane': {
     'type': 'COM',
-    'ip': '172.254.1.101',
+    'ip': '172.1.254.101',
   },
   'PFCC1 MON Lane': {
     'type': 'MON',
-    'ip': '172.254.1.111',
+    'ip': '172.1.254.111',
   },
   'PFCC2 COM Lane': {
     'type': 'COM',
-    'ip': '172.254.1.102',
+    'ip': '172.1.254.102',
   },
   'PFCC2 MON Lane': {
     'type': 'MON',
-    'ip': '172.254.1.112',
+    'ip': '172.1.254.112',
   },
   'PFCC3 COM Lane': {
     'type': 'COM',
-    'ip': '172.254.1.103',
+    'ip': '172.1.254.103',
   },
   'PFCC3 MON Lane': {
     'type': 'MON',
-    'ip': '172.254.1.113',
+    'ip': '172.1.254.113',
   },
 }
 
@@ -79,12 +81,6 @@ expected = {
 }
 
 
-def man():
-  print('\nPFCC Debug tools:\n')
-  print('  recon: check which units/lanes are online - positions, modes')
-  print('  config: grabs target configuration, optionally checks it agains expected config')
-
-
 def recon():
   results = {}
   spinners = {}
@@ -99,8 +95,9 @@ def recon():
         spinners[name] = Text(f'✓ {name} - {ip}', style='green')
       else:
         results[name] = False
-        spinners[name] = Text(f'✗ {name} - {ip}', style='red')
+        spinners[name] = Text(f'  {name} - {ip}')
 
+  print('\nEnumerating connected UUT and TB...\n')
   threads = []
   for name, ip in targets_ips.items():
     t = threading.Thread(target=ping_target, args=(name, ip))
@@ -128,6 +125,31 @@ def recon():
     live.update(table)
 
   print(f'\nScan complete: {sum(results.values())}/{len(targets_ips)} targets online')
+
+  ### ADS2 
+  print('\nChecking ADS2 environment...')
+  if check_ads2_session(verbose=True):
+    data = get_ads2_data()
+    print(data)
+    print('Checking PSU...')
+    print('TODO')
+    print('Checking PFCCTB HPP...')
+    print('TODO')
+  
+def check_ads2_session(verbose=False):
+  res = subprocess.run(['ads2', 'session', 'state'], capture_output=True, text=True)
+  if res.returncode != 0:
+    if verbose: console.print(Text('   Not connected to TB'))
+    return False
+  elif 'clusterstate = "RUN_LOADED";' not in res.stdout:
+    if verbose: console.print(Text('   ADS2 session is NOT running', style='red'))
+    return False
+
+  elif 'clusterstate = "RUN_LOADED";' in res.stdout:
+    if verbose: console.print(Text(' ✓ ADS2 session is running', style='green'))
+    return True
+  else:
+    raise Exception(f'Unhandled ADS2 session state:\n{res}')
 
 
 def config(args):
@@ -162,11 +184,16 @@ def config(args):
     print('\nSome CRC values do not match!')
 
 
-def test():
-  subprocess.run(['ads2', 'python', 'taupe.py'])
+def get_ads2_data():
+  subprocess.run(['ads2', 'python', 'ads2_getter.py'])
   with open('tmp/data.json') as f:
     data = json.load(f)
-  print(data)
+  return data
+
+
+def test():
+  pass
+
 
 def cli():
   parser = argparse.ArgumentParser(description='PFCC debug tool.')
@@ -188,3 +215,6 @@ def cli():
   else:
     parser.print_help()
   
+
+if __name__ == '__main__':
+  test()
