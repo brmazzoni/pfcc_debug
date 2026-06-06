@@ -1,7 +1,16 @@
 # PFCC debug tools
 
-## IP addresses
+## Modes
 
+Mode   | SHOP1  | SHOP2  | Dataloading allowed | Watchdog Enabled | Debug (ETH/UART)
+---    | ---    | ---    | :-:                 | :-:              | :-:
+Normal | 0/OPEN | 0/OPEN | No                  | Yes              | No
+Shop   | 1/GND  | 1/GND  | Yes                 | No               | No
+Test   | 1/GND  | 0/OPEN | No                  | Yes              | Yes
+Debug  | 0/OPEN | 1/GND  | No                  | No               | Yes
+
+
+## IP addresses
 
 `172.28.1.XYZ` or `172.254.1.XYZ` where:
 - `X`: 1 dataloader IP, 2 for default IPs???
