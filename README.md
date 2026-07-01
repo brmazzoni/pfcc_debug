@@ -6,8 +6,8 @@ Mode   | SHOP1  | SHOP2  | Dataloading allowed | Watchdog Enabled | Debug (ETH/U
 ---    | ---    | ---    | :-:                 | :-:              | :-:
 Normal | 0/OPEN | 0/OPEN | No                  | Yes              | No
 Shop   | 1/GND  | 1/GND  | Yes                 | No               | No
-Test   | 1/GND  | 0/OPEN | No                  | Yes              | Yes
-Debug  | 0/OPEN | 1/GND  | No                  | No               | Yes
+Debug  | 1/GND  | 0/OPEN | No                  | No               | Yes
+Test   | 0/OPEN | 1/GND  | No                  | Yes              | Yes
 
 
 ## IP addresses
@@ -34,3 +34,21 @@ platform_error_handle -ip <IP> -trg {PFCC_COM|PFCC_MON}
 ```
 traceread -ip <IP> -trg {PFCC_COM|PFCC_MON} -file <output_file, e.g. com_sump.bin>
 ```
+
+## Regenerate the iom config and test app
+
+```
+make xml_icd  
+make iom_cfg  
+make app_gen  
+make app_build
+make ads_ses  
+make iom_upl  
+make app_upl  
+```
+## Read forwarding from RTPC
+
+```
+sudo tcpdump -i eth0 port 52001 -X
+```
+

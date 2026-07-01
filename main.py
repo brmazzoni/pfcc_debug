@@ -108,67 +108,13 @@ ips = {
   'PFCCTB RTPC 02001': '172.28.1.1',
   'PFCCTB RTPC 02004': '172.28.1.4',
 }
-ips_extended = {
-  'PFCC1 COM Lane USER': '172.1.254.101',
-  'PFCC1 MON Lane USER': '172.1.254.111',
-  'PFCC2 COM Lane USER': '172.1.254.102',
-  'PFCC2 MON Lane USER': '172.1.254.112',
-  'PFCC3 COM Lane USER': '172.1.254.103',
-  'PFCC3 MON Lane USER': '172.1.254.113',
-  'PFCC1 COM Lane DEFAULT': '172.1.254.201',
-  'PFCC1 MON Lane DEFAULT': '172.1.254.211',
-  'PFCC2 COM Lane DEFAULT': '172.1.254.202',
-  'PFCC2 MON Lane DEFAULT': '172.1.254.212',
-  'PFCC3 COM Lane DEFAULT': '172.1.254.203',
-  'PFCC3 MON Lane DEFAULT': '172.1.254.213',
-  'TB SUBNET PFCC1 COM Lane USER': '172.28.1.101',
-  'TB SUBNET PFCC1 MON Lane USER': '172.28.1.111',
-  'TB SUBNET PFCC2 COM Lane USER': '172.28.1.102',
-  'TB SUBNET PFCC2 MON Lane USER': '172.28.1.112',
-  'TB SUBNET PFCC3 COM Lane USER': '172.28.1.103',
-  'TB SUBNET PFCC3 MON Lane USER': '172.28.1.113',
-  'TB SUBNET PFCC1 COM Lane DEFAULT': '172.28.1.201',
-  'TB SUBNET PFCC1 MON Lane DEFAULT': '172.28.1.211',
-  'TB SUBNET PFCC2 COM Lane DEFAULT': '172.28.1.202',
-  'TB SUBNET PFCC2 MON Lane DEFAULT': '172.28.1.212',
-  'TB SUBNET PFCC3 COM Lane DEFAULT': '172.28.1.203',
-  'TB SUBNET PFCC3 MON Lane DEFAULT': '172.28.1.213',
-  'COM Lane RESERVE IP': '172.1.254.253',
-  'MON Lane RESERVE IP': '172.1.254.254',
-  'PFCCTB DPC DEFAULT': '172.28.1.10',
-  'PFCCTB DPC 02001': '172.28.1.11',
-  'PFCCTB DPC 02004': '172.28.1.14',
-  'PFCCTB RTPC DEFAULT': '172.28.1.1',
-  'PFCCTB RTPC 02001': '172.28.1.1',
-  'PFCCTB RTPC 02004': '172.28.1.4',
-}
 
-targets = {
-  'PFCC1 COM Lane': {
-    'type': 'COM',
-    'ip': '172.1.254.101',
-  },
-  'PFCC1 MON Lane': {
-    'type': 'MON',
-    'ip': '172.1.254.111',
-  },
-  'PFCC2 COM Lane': {
-    'type': 'COM',
-    'ip': '172.1.254.102',
-  },
-  'PFCC2 MON Lane': {
-    'type': 'MON',
-    'ip': '172.1.254.112',
-  },
-  'PFCC3 COM Lane': {
-    'type': 'COM',
-    'ip': '172.1.254.103',
-  },
-  'PFCC3 MON Lane': {
-    'type': 'MON',
-    'ip': '172.1.254.113',
-  },
-}
+side = os.getenv('PFCC')
+if side is None:
+  side = 1
+
+com_ip = f'172.1.254.20{side}'
+mon_ip = f'172.1.254.21{side}'
 
 # QTP configuration
 expected = {
@@ -184,8 +130,10 @@ expected = {
   },
 }
 
+def logassert(msg, condition): console.print(msg, Text('OK' if condition else 'KO', style='green' if condition else 'red'))
+
 def ping(args):
-  targets = ips_extended if args.extended == True else ips
+  targets = ips
   results = {}
   spinners = {}
   lock = threading.Lock()
@@ -237,11 +185,11 @@ def recon(args):
   print('\nChecking ADS2 environment...')
   if check_ads2_session(verbose=True):
     data = get_ads2_data()
-    print(data)
-    print('Checking PSU...')
-    print('TODO')
-    print('Checking PFCCTB HPP...')
-    print('TODO')
+    logassert('Checking PSU...', check_power())
+    print('Checking PFCCTB HPP... ', end='')
+    if data['pp1'] == 0 and data['pp2'] == 0 and data['pp3'] == 0 and data['parity'] == 0: console.print(Text('PFCC1 HPP; ', style='green'), end='')
+    if data['shop1'] == 1 and data['shop2'] == 1: console.print('SHOP Mode')
+
 
   ### TOOLS
   print('\nChecking Tools installation...')
@@ -263,36 +211,55 @@ def check_ads2_session(verbose=False):
     raise Exception(f'Unhandled ADS2 session state:\n{res}')
 
 
-def config(args):
-  res = subprocess.run(f'binary_udp_loader 172.1.254.201 COM REV', shell=True)
-  res = subprocess.run(f'binary_udp_loader 172.1.254.211 MON REV', shell=True)
-  return
+def check_power(verbose=False):
+  data = get_ads2_data()
+  c1 = data['psu1_state'] == 1
+  c2 = data['psu2_state'] == 1
+  c3 = 27 < data['psu1_voltage'] < 29
+  c4 = 27 < data['psu2_voltage'] < 29
+  c5 = 0.4 < data['psu1_current'] < 0.5
+  c6 = 0.4 < data['psu2_current'] < 0.5
+  return (c1 or c2) and (c3 or c4) and (c5 or c6)
 
-  all_match = True
+def check_shop_mode(verbose=False):
+  data = get_ads2_data()
+  c7 = data['shop1'] == 1
+  c8 = data['shop2'] == 1
+  return c7 and c8
 
-  for key, expected_crc in expected[targets[target]['type']].items():
-    found = False
-    for line in res.stdout.split('\n'):
-      if key in line:
-        # Look for hex pattern (0x followed by hex digits)
-        match = re.search(r'(0x[0-9A-Fa-f]+)', line)
-        if match:
-          actual_crc = match.group(1)
-          if actual_crc.upper() == expected_crc.upper():
-            print(f'  ✓ {key}: {actual_crc} (match)')
-          else:
-            print(f'  ✗ {key}: {actual_crc} (expected: {expected_crc})')
-            all_match = False
-          found = True
-          break
-    if not found:
-      print(f'  ✗ {key}: not found in output (expected: {expected_crc})')
-      all_match = False
 
-  if all_match:
-    print('\nAll CRC values match!')
+def config(raw=True):
+  if raw:
+    print('\nCOM CONFIG:')
+    res = subprocess.run(f'binary_udp_loader {com_ip} COM REV', shell=True)
+    print('\nMON CONFIG:')
+    res = subprocess.run(f'binary_udp_loader {mon_ip} MON REV', shell=True)
+    return
   else:
-    print('\nSome CRC values do not match!')
+    all_match = True
+    for key, expected_crc in expected[targets[target]['type']].items():
+      found = False
+      for line in res.stdout.split('\n'):
+        if key in line:
+          # Look for hex pattern (0x followed by hex digits)
+          match = re.search(r'(0x[0-9A-Fa-f]+)', line)
+          if match:
+            actual_crc = match.group(1)
+            if actual_crc.upper() == expected_crc.upper():
+              print(f'  ✓ {key}: {actual_crc} (match)')
+            else:
+              print(f'  ✗ {key}: {actual_crc} (expected: {expected_crc})')
+              all_match = False
+            found = True
+            break
+      if not found:
+        print(f'  ✗ {key}: not found in output (expected: {expected_crc})')
+        all_match = False
+
+    if all_match:
+      print('\nAll CRC values match!')
+    else:
+      print('\nSome CRC values do not match!')
 
 
 def get_ads2_data():
@@ -349,7 +316,7 @@ def decode_com_pwr_flt_word(word, verbose=False):
 
 def decode_bus_silent_flt_word(word, verbose=False):
   faults = []
-  for bus_type, byte in zip(['A429', 'CAN', 'UART'], word.split()[:3]): # only first 3 bytes are useful
+  for bus_type, byte in zip(['UART', 'CAN', 'A429'], word.split()[1:]):
     bits = format(int(byte, 16), '08b') # reads the hex values, converts to bits str
     for pos, b in enumerate(bits[::-1]): # enumerates from right to left
       if b == '1': faults.append(f'{bus_type} CH{pos} SILENT')
@@ -380,11 +347,37 @@ def translate_fault_log(log, decode_func, verbose=False):
 
 
 def extract_flt_blocks(log):
+  blocks = {}
   res = re.findall(r'Error (.*?)(?:\n\n|$)', log, re.DOTALL)
-  print(res, len(res))
   for r in res:
-    print(r)
-    print()
+    err = re.findall(r'[0-9]+: (.*?);', r)[0]
+    logs = '\n'.join(r.split('\n')[1:])
+    blocks[err] = logs
+  return blocks
+
+
+def reg2log():
+  com_log = []
+  console.print('Checking ADS2 session... ', end='')
+  if check_ads2_session(): console.print(Text('OK', style='green'))
+  else:
+    console.print(Text('KO', style='red'))
+    return
+  
+  console.print('Checking SHOP mode... ', end='')
+  if check_shop_mode() and check_power(): console.print(Text('OK', style='green'))
+  else:
+    console.print(Text('KO', style='red'))
+    return
+  # run COM, save raw file and grab blocks
+  res = subprocess.run(['platform_error_handle', '-ip', com_ip, '-trg', 'PFCC_COM'], text=True, capture_output=True)
+  print(res.stdout)
+  blocks = extract_flt_blocks(res.stdout)
+  for err, logs in blocks.items():
+    print(err)
+    print(logs)
+    #log.append
+  # do same for MON
 
 def cli():
   parser = argparse.ArgumentParser(description='PFCC debug tool.')
@@ -411,11 +404,13 @@ def cli():
   translate_group.add_argument('--com_pwr', help='decode COM PWR fault word', action='store_true')
   translate_group.add_argument('--bus_silent', help='decode BUS SILENT fault word', action='store_true')
 
+  parser_reg2log = subparsers.add_parser('reg2log', help='reads registers from PFCC and creates a log file')
+
   args = parser.parse_args()
   sc = args.subcommand
   if sc == 'ping': ping(args)
   elif sc == 'recon': recon(args)
-  elif sc == 'config': config(args)
+  elif sc == 'config': config()
   elif sc == 'tools': check_tools()
   elif sc == 'decode':
     if args.bus_silent == True: decode_bus_silent_flt_word(args.word, verbose=True)
@@ -425,9 +420,11 @@ def cli():
     if args.bus_silent == True: translate_fault_log(com_bus_silent, decode_bus_silent_flt_word)
     elif args.com_pwr == True: translate_fault_log(com_pwr_fault, decode_com_pwr_flt_word)
     else: raise Exception('WTF?')
+  elif sc == 'reg2log': reg2log()
   else: parser.print_help()
 
 
 if __name__ == '__main__':
   #print('Run debug subcommand')
-  extract_flt_blocks(com_log)
+  print() 
+  extract_flt_blocks(sys.stdin.read())
